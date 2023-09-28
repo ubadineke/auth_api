@@ -42,6 +42,7 @@ const userSchema = new mongoose.Schema({
     passwordResetExpires: Date
 })
 
+//Hash Password 
 userSchema.pre('save', async function(next){
     //ONly run this function if password was actually modified
     if(!this.isModified('password')) return next();
@@ -53,6 +54,11 @@ userSchema.pre('save', async function(next){
     this.passwordConfirm = undefined;
     next();
 });
+
+//Creating an instance
+userSchema.methods.correctPassword = async function(incomingPassword, storedPassword){
+    return await bcrypt.compare(incomingPassword, storedPassword)
+};
 
 const User = mongoose.model('User', userSchema)
 module.exports = User
