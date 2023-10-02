@@ -40,7 +40,14 @@ exports.protect = async (req, res, next) => {
             message: "The user belonging to this token does not exist"
         })
     }
-
+    
+    // 4) Check if user changed password after the token was issued
+    if(currentUser.changedPasswordAfter(decoded.iat)){
+        return res.status(401).json({
+            status: 'fail',
+            message: "User recently changed passowrd! Please log in again!"
+        })
+    }
     //GRANT ACCESS
     req.user = currentUser
     next();
