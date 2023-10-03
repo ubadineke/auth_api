@@ -9,6 +9,6 @@ router.post('/forgotPassword', controller.forgotPassword)
 router.patch('/resetPassword/:token', controller.resetPassword)
 router
     .route('/')
-    .get(controller.protect, controller.getUsers)
+    .get(controller.protect, controller.restrictTo('admin'), controller.getUsers)
 
 module.exports = router;
