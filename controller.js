@@ -10,6 +10,20 @@ const createToken = id => { return jwt.sign({id}, process.env.JWT_SECRET, {
     })
 }
 
+const createAndSendToken = (user, statusCode, res, text) => {
+    const token = createToken(user._id)
+    user.password = undefined;
+        res.status(statusCode).json({
+            status:'success',
+            message:text,
+            token,
+            data: {
+                user
+            }
+         })
+}
+
+
 exports.protect = async (req, res, next) => {
     //1) Get token and check if its there
     let token;
@@ -74,14 +88,7 @@ exports.signup = async (req, res, next) => {
             passwordChangedAt: Date.now()
         });
   
-        const token = createToken(newUser._id)
-        res.status(200).json({
-            status:'success',
-            token,
-            data: {
-                user: newUser
-            }
-         })
+        createAndSendToken(newUser, 201, res)
     } catch(err){
         res.status(404).json({
             status:'fail',
@@ -110,69 +117,38 @@ exports.login = async (req, res, next) => {
     }
 
     //3) If everything ok, send token to client
-    const token = createToken(user._id);
-    res.status(200).json({
-        status: 'success',
-        token
-    })
+    createAndSendToken(user, 200, res,)
+    
 }
 
 exports.changePassword = async (req, res, next) => {
-// 1) Get user based on the token 
-let token;
-    if( req.headers.authorization && req.headers.authorization.startsWith('Bearer')){
-        token = req.headers.authorization.split(' ')[1]
-    }
+    // 1) Get user from collection
+    const user = await User.findById(req.user.id).select('+password')
 
-    if(!token){
-        return next(res.status(401).json({message:"You are not logged in. Please log in to gain access!"}))
+    //2) Check if POSTed current password is correct
+    if ((!await user.correctPassword(req.body.oldPassword, user.password))){
+        return res.status(401.).json('Your current password is wrong')
     }
-
-    //Verifying token 
-    let decoded;
+    //3) If so, update Password
     try{
-        decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET)
-    } catch(err){
+    user.password = req.body.newPassword;
+        user.passwordConfirm = req.body.confirmPassword;
+        user.passwordChangedAt = Date.now()
+        await user.save();
+    } catch (err){
         return res.status(401).json({
-            status: 'fail',
-            message: ["Invalid token, Please log in again!"]
-        })
-    }
-
-    //Check if user still exists
-    const user = await User.findById(decoded.id).select('+password')
-    if(!user){
-        return res.status(401).json({
-            status:  'fail',
-            message: "The user belonging to this token does not exist"
+            status:"fail",
+            message:err
         })
     }
     
-//2) Confirm existing password
-if(!await user.correctPassword(req.body.oldPassword, user.password)){
-    return res.status(401).json({
-        status:'fail',
-        message:"Incorrect password"
-     }) 
-}
-//3) If user has been verified, set new password and update passwordChangedAt property 
-try{
-    user.password=req.body.newPassword
-    user.passwordConfirm = req.body.confirmPassword
-    user.passwordChangedAt = Date.now()
-    await user.save();
-    return res.status(200).json({
-        status:'success',
-        message:"Password changed successfully"
-     })
-    
-} catch(err){
-    return res.status(401).json({
-        status:'fail',
-        message:err
-     })
-}
-
+    //4) Log user in, send JWT
+    createAndSendToken(user, 200, res)
+//     const token = createToken(user._id);
+//     res.status(200).json({
+//         status: 'success',
+//         token
+//     })
 }
 
 exports.forgotPassword = async (req, res, next) => {
@@ -235,12 +211,13 @@ exports.resetPassword = async (req, res, next) => {
         await user.save();
     
     //3) Log the user in, send JWT
-        const token = createToken(user._id);
-        console.log(token)
-        return res.status(200).json({
-            status: 'success',
-            token
-        })
+        createAndSendToken(user, 200, res, 'Password reset successful')
+        // const token = createToken(user._id);
+        // return res.status(200).json({
+        //     status: 'success',
+        //     message: "Password reset successful",
+        //     token
+        // })
     } catch(err){
         return res.status(404).json({
         status: 'fail',
